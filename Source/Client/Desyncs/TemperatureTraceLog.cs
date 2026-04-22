@@ -27,6 +27,7 @@ namespace Multiplayer.Client.Desyncs
 
             WriteSentinel("A_temp_trace_postfix_entered");
             WallEqProbeEqualize.EnsureRegistered();
+            EqRegenProbeRegen.EnsureRegistered();
             WriteSentinel("D_after_ensure_registered");
 
             var map = __instance.map;
