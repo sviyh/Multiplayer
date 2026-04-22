@@ -149,10 +149,15 @@ namespace Multiplayer.Client
                 simulating = true;
         }
 
-        public string GetFormattedStackTracesForRange(int diffAt)
+        // bounded=true: window of ±desyncTracesRadius around diffAt. Required for the host→client
+        // network response, which must fit in a single 64KiB packet (ConnectionBase.MaxSinglePacketSize).
+        // Dumping everything there produces a gzipped ClientTracesPacket >65KiB and Send throws
+        // PacketSendException on the host, so host_traces.txt ends up as "No host traces".
+        // bounded=false: full trace history. Used only for the local file write, which is unconstrained.
+        public string GetFormattedStackTracesForRange(int diffAt, bool bounded = true)
         {
-            var start = Math.Max(0, diffAt - Multiplayer.settings.desyncTracesRadius);
-            var end = diffAt + Multiplayer.settings.desyncTracesRadius;
+            var start = bounded ? Math.Max(0, diffAt - Multiplayer.settings.desyncTracesRadius) : 0;
+            var end = bounded ? diffAt + Multiplayer.settings.desyncTracesRadius : desyncStackTraces.Count;
             var traceId = start;
 
             return

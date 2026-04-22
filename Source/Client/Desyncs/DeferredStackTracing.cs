@@ -111,6 +111,12 @@ namespace Multiplayer.Client.Desyncs
         static void Finalizer() => DeferredStackTracing.ignoreTraces--;
     }
 
+    // Temporarily disabled: investigating a +1 Rand divergence whose untraced source
+    // lives in one of the suppressed subsystems. Pawn temperatures already differ at
+    // window start, so SteadyEnvironmentEffects/TempTerrainManager are prime suspects.
+    // Restore both suppressions once the cause is identified — they exist because these
+    // subsystems make many Rand calls per tick and tracing them all is noisy.
+    /*
     [HarmonyPatch(typeof(SteadyEnvironmentEffects), nameof(SteadyEnvironmentEffects.SteadyEnvironmentEffectsTick))]
     static class SteadyEnvironmentEffectsTickTraceIgnore
     {
@@ -124,6 +130,7 @@ namespace Multiplayer.Client.Desyncs
         static void Prefix() => DeferredStackTracing.ignoreTraces++;
         static void Finalizer() => DeferredStackTracing.ignoreTraces--;
     }
+    */
 
     /*[HarmonyPatch(typeof(StoreUtility), nameof(StoreUtility.TryFindBestBetterStoreCellForWorker))]
     static class FindBestStorageCellTraceIgnore

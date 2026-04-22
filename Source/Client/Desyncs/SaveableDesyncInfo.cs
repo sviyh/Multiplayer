@@ -97,7 +97,9 @@ public class SaveableDesyncInfo(
                            " has ended sooner on one of the connection sides\n\n";
         }
 
-        traceMessage += local.GetFormattedStackTracesForRange(diffAt);
+        // bounded:false — the local file has no packet-size limit, so dump everything.
+        // Host traces stay windowed (default bounded:true) because they must fit in one 64KiB packet.
+        traceMessage += local.GetFormattedStackTracesForRange(diffAt, bounded: false);
         return traceMessage;
     }
 

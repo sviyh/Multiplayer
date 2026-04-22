@@ -1,12 +1,49 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Multiplayer.Client.Desyncs;
 using Multiplayer.Client.Util;
 using Multiplayer.Common;
 using Multiplayer.Common.Networking.Packet;
 using RimWorld;
 using Verse;
+
+namespace Multiplayer.Client
+{
+    // Per-room cumulative PushHeat accumulator. Hooks Room.PushHeat to sum every heat
+    // push that lands in each room across the whole session. Trace lines emit the lifetime
+    // total + last-push tick + last-push energy, so divergence shows up even when the push
+    // happened many ticks before the trace window (CompHeatPusher uses TickerType.Rare).
+    // If host and local cumulative totals differ for the same room → PushHeat path diverged.
+    // If totals match but RT still differs → divergence is in RoomTempTracker.EqualizeTemperature.
+    internal static class RoomHeatProbe
+    {
+        private static Dictionary<int, double> cumulativeHeat = new();
+        private static Dictionary<int, int> lastPushTick = new();
+        private static Dictionary<int, float> lastPushEnergy = new();
+
+        [MpPostfix(typeof(Room), nameof(Room.PushHeat), new[] { typeof(float) })]
+        private static void Postfix(Room __instance, float energy, bool __result)
+        {
+            if (!__result) return;
+            int id = __instance.ID;
+            cumulativeHeat.TryGetValue(id, out double cum);
+            cumulativeHeat[id] = cum + energy;
+            lastPushTick[id] = Find.TickManager.ticksGameInt;
+            lastPushEnergy[id] = energy;
+        }
+
+        public static double GetCumulative(int roomID)
+            => cumulativeHeat.TryGetValue(roomID, out double v) ? v : 0d;
+
+        public static int GetLastPushTick(int roomID)
+            => lastPushTick.TryGetValue(roomID, out int v) ? v : -1;
+
+        public static float GetLastPushEnergy(int roomID)
+            => lastPushEnergy.TryGetValue(roomID, out float v) ? v : 0f;
+    }
+}
 
 namespace Multiplayer.Client
 {
@@ -231,6 +268,18 @@ namespace Multiplayer.Client
             {
                 item.thingDef = thing.def;
                 item.thingId = thing.thingIDNumber;
+
+                if (thing is Pawn pawn && pawn.Spawned)
+                {
+                    try
+                    {
+                        item.moreInfo = $"{moreInfo}{BuildPawnDiag(pawn)}";
+                    }
+                    catch (Exception e)
+                    {
+                        item.moreInfo = $"{moreInfo}ERR:{e.GetType().Name}";
+                    }
+                }
             }
 
             var hash = Gen.HashCombineInt(hashIn, depth, (int)(item.rngState >> 32), (int)item.rngState);
@@ -240,6 +289,71 @@ namespace Multiplayer.Client
 
             // Track & network trace hash, for comparison with other opinions.
             OpinionInBuilding.desyncStackTraceHashes.Add(hash);
+        }
+
+        // Per-pawn diagnostic line for desync traces. All vanilla heat inputs have been proven
+        // identical between host and client, yet indoor Room.Temperature still drifts.
+        // This round probes room geometry (cell/roof counts) and modded heat-pushers hiding in
+        // the room's thing set — the two remaining hypotheses.
+        private static string BuildPawnDiag(Pawn pawn)
+        {
+            var sb = new StringBuilder();
+            sb.Append($"T={pawn.AmbientTemperature:F4}");
+            sb.Append($" J={pawn.CurJobDef?.defName ?? "-"}");
+            sb.Append($" TL={pawn.jobs?.curDriver?.ticksLeftThisToil ?? -1}");
+
+            var room = pawn.GetRoom();
+            if (room != null)
+            {
+                sb.Append($" rID={room.ID}");
+                sb.Append($" RRole={room.Role?.defName ?? "-"}");
+                sb.Append($" RC={room.CellCount}");
+                sb.Append($" RR={room.OpenRoofCount}");
+                sb.Append($" RX={(room.UsesOutdoorTemperature ? 1 : 0)}");
+                sb.Append($" RT={room.Temperature:F4}");
+                sb.Append($" RPH={RoomHeatProbe.GetCumulative(room.ID):F4}@{RoomHeatProbe.GetLastPushTick(room.ID)}={RoomHeatProbe.GetLastPushEnergy(room.ID):F4}");
+
+                // Hash thing defs inside the room — catches modded heat-pushers we're not naming.
+                int thingsHash = 17;
+                int thingsCount = 0;
+                foreach (var t in room.ContainedAndAdjacentThings)
+                {
+                    thingsHash = Gen.HashCombineInt(thingsHash, t.def?.shortHash ?? 0);
+                    thingsCount++;
+                }
+                sb.Append($" RTH={thingsCount}/{thingsHash:X}");
+            }
+            else
+            {
+                sb.Append(" rID=-1");
+            }
+
+            var map = pawn.Map;
+            if (map == null) return sb.ToString();
+
+            sb.Append($" FC={map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count}");
+
+            var wm = map.weatherManager;
+            if (wm != null)
+                sb.Append($" W={wm.curWeather?.defName ?? "-"}@{wm.curWeatherAge}");
+
+            sb.Append($" OT={map.mapTemperature.OutdoorTemp:F4}");
+
+            int batteryCount = 0;
+            float batterySum = 0f;
+            var buildings = map.listerBuildings.allBuildingsColonist;
+            for (int b = 0; b < buildings.Count; b++)
+            {
+                var bat = buildings[b].TryGetComp<CompPowerBattery>();
+                if (bat != null)
+                {
+                    batteryCount++;
+                    batterySum += bat.StoredEnergy;
+                }
+            }
+            sb.Append($" BC={batteryCount} BE={batterySum:F1}");
+
+            return sb.ToString();
         }
 
         public static string MethodNameWithIL(string rawName)

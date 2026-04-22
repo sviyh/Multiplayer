@@ -18,7 +18,7 @@ namespace Multiplayer.Client
         public bool showDevInfo;
         public bool includeReplayInDesync = VersionChecker.IsContinuousRelease;
         public int jittedMethodsInDesync = 1500;
-        public int desyncTracesRadius = 40;
+        public int desyncTracesRadius = 200;
         public string serverAddress = "127.0.0.1";
         public bool appendNameToAutosave;
         public bool showModCompatibility = true;
@@ -30,7 +30,7 @@ namespace Multiplayer.Client
         public Rect chatRect;
         public Vector2 resolutionForChat;
         public bool showMainMenuAnim = true;
-        public DesyncTracingMode desyncTracingMode = DesyncTracingMode.Fast;
+        public DesyncTracingMode desyncTracingMode = DesyncTracingMode.Slow;
         public bool transparentPlayerCursors = true;
         public List<ColorRGBClient> playerColors = new(DefaultPlayerColors);
 
