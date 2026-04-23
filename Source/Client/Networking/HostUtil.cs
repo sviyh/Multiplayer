@@ -38,7 +38,7 @@ namespace Multiplayer.Client
             PrepareGame();
             SetGameState(settings);
 
-            Multiplayer.session.dataSnapshot = await CreateGameData();
+            Multiplayer.session.dataSnapshot = await CreateGameData(fromReplay);
 
             MakeHostOnServer(serverConn);
 
@@ -104,10 +104,16 @@ namespace Multiplayer.Client
             Multiplayer.GameComp.timeControl = settings.timeControl;
         }
 
-        private static async Task<GameDataSnapshot> CreateGameData()
+        private static async Task<GameDataSnapshot> CreateGameData(bool fromReplay)
         {
             await LongEventTask.ContinueInLongEvent("MpSaving", false);
-            return SaveLoad.CreateGameDataSnapshot(SaveLoad.SaveAndReload(), Multiplayer.GameComp.multifaction);
+            // SP-host path needs SaveAndReload to canonicalize MP-injected state via a
+            // serialize+reload roundtrip. Replay-host path was just deserialized from disk
+            // and is already canonical — the roundtrip is wasted work and risks asymmetric
+            // mod-side Rand consumption between the in-process reload and the client's
+            // fresh-process load.
+            var data = fromReplay ? SaveLoad.SaveGameData() : SaveLoad.SaveAndReload();
+            return SaveLoad.CreateGameDataSnapshot(data, Multiplayer.GameComp.multifaction);
         }
 
         private static void SetupGameFromSingleplayer()
