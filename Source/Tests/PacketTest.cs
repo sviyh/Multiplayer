@@ -35,6 +35,10 @@ public class PacketTest
         yield return new ClientCommandPacket(CommandType.PlayerCount, 123, []);
         yield return new ClientCommandPacket(CommandType.DebugTools, 0, [255, 0, 255]);
 
+        var largePayload = new byte[100_000];
+        for (var i = 0; i < largePayload.Length; i++) largePayload[i] = (byte)(i & 0xFF);
+        yield return new ClientCommandPacket(CommandType.Sync, 0, largePayload);
+
         yield return new ServerCommandPacket
         {
             type = CommandType.Sync,

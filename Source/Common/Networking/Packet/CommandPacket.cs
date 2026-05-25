@@ -1,8 +1,10 @@
 ﻿namespace Multiplayer.Common.Networking.Packet;
 
-[PacketDefinition(Packets.Server_Command)]
+[PacketDefinition(Packets.Server_Command, allowFragmented: true)]
 public record struct ServerCommandPacket : IPacket
 {
+    public const int MaxLength = 1 << 22;
+
     public CommandType type;
     public int ticks;
     public int factionId;
@@ -30,11 +32,11 @@ public record struct ServerCommandPacket : IPacket
         buf.Bind(ref factionId);
         buf.Bind(ref mapId);
         buf.Bind(ref playerId);
-        buf.BindRemaining(ref data, maxLength: 65535);
+        buf.BindRemaining(ref data, maxLength: MaxLength);
     }
 }
 
-[PacketDefinition(Packets.Client_Command)]
+[PacketDefinition(Packets.Client_Command, allowFragmented: true)]
 public record struct ClientCommandPacket(CommandType type, int mapId, byte[] data) : IPacket
 {
     public CommandType type = type;
@@ -45,6 +47,6 @@ public record struct ClientCommandPacket(CommandType type, int mapId, byte[] dat
     {
         buf.BindEnum(ref type);
         buf.Bind(ref mapId);
-        buf.BindRemaining(ref data, maxLength: 65535);
+        buf.BindRemaining(ref data, maxLength: ServerCommandPacket.MaxLength);
     }
 }

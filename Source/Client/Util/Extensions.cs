@@ -75,8 +75,14 @@ namespace Multiplayer.Client
             return null;
         }
 
-        public static void SendCommand(this ConnectionBase conn, CommandType type, int mapId, byte[] data) =>
-            conn.Send(new ClientCommandPacket(type, mapId, data));
+        public static void SendCommand(this ConnectionBase conn, CommandType type, int mapId, byte[] data)
+        {
+            var packet = new ClientCommandPacket(type, mapId, data);
+            if (data.Length > ConnectionBase.MaxSinglePacketSize - 32)
+                conn.SendFragmented(packet.Serialize());
+            else
+                conn.Send(packet);
+        }
 
         public static void SendCommand(this ConnectionBase conn, CommandType type, int mapId, params object[] data) =>
             SendCommand(conn, type, mapId, ByteWriter.GetBytes(data));

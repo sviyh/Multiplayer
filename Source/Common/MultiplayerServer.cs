@@ -215,17 +215,27 @@ namespace Multiplayer.Common
         public void SendToPlaying<T>(T packet, bool reliable = true, ServerPlayer? excluding = null) where T : IPacket
         {
             var serialized = packet.Serialize();
+            bool fragment = PacketTypeInfo<T>.AllowFragmented &&
+                            serialized.data.Length + 1 > ConnectionBase.MaxSinglePacketSize;
             foreach (ServerPlayer player in PlayingPlayers)
                 if (player != excluding)
-                    player.conn.Send(serialized, reliable);
+                    if (fragment)
+                        player.conn.SendFragmented(serialized);
+                    else
+                        player.conn.Send(serialized, reliable);
         }
 
         public void SendToIngame<T>(T packet, bool reliable = true, ServerPlayer? excluding = null) where T : IPacket
         {
             var serialized = packet.Serialize();
+            bool fragment = PacketTypeInfo<T>.AllowFragmented &&
+                            serialized.data.Length + 1 > ConnectionBase.MaxSinglePacketSize;
             foreach (ServerPlayer player in PlayingIngamePlayers)
                 if (player != excluding)
-                    player.conn.Send(serialized, reliable);
+                    if (fragment)
+                        player.conn.SendFragmented(serialized);
+                    else
+                        player.conn.Send(serialized, reliable);
         }
 
         public ServerPlayer? GetPlayer(string username)
